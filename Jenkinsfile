@@ -37,7 +37,7 @@ spec:
     }
 
     stages {
-        stage('Build') {
+        stage('Compile') {
             steps {
                 // download dependencies + compile once, before the parallel stages
                 sh 'mvn -B -DskipTests test-compile'
@@ -57,6 +57,19 @@ spec:
                     }
                     steps {
                         sh 'mvn -B test -D testGroups=integration'
+                    }
+                }
+            }
+        }
+
+        stage('Build') {
+            steps {
+                script {
+                    try {
+                        sh 'mvn -B package -D skipTests'
+                    } catch (ex) {
+                        echo "Error while generating JAR file"
+                        throw ex
                     }
                 }
             }
