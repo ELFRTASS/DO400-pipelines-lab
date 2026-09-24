@@ -1,7 +1,13 @@
 pipeline {
-    agent any
+    agent {
+        kubernetes {
+            inheritFrom 'maven'        // our "maven" template (Helm): JDK 17 + Maven
+            defaultContainer 'maven'   // every sh step runs in the maven container
+        }
+    }
+
     parameters {
-        booleanParam(name: "RUN_INTEGRATION_TESTS", defaultValue: true)
+        booleanParam(name: 'RUN_INTEGRATION_TESTS', defaultValue: true)
     }
 
     stages {
@@ -9,19 +15,18 @@ pipeline {
             parallel {
                 stage('Unit tests') {
                     steps {
-                        sh './mvnw test -D testGroups=unit'
+                        sh 'chmod +x ./mvnw && ./mvnw test -D testGroups=unit'
                     }
+                }
                 stage('Integration tests') {
                     when {
                         expression { return params.RUN_INTEGRATION_TESTS }
                     }
-
                     steps {
-                        sh './mvnw test -D testGroups=integration'
+                        sh 'chmod +x ./mvnw && ./mvnw test -D testGroups=integration'
                     }
                 }
             }
         }
     }
-}
 }
