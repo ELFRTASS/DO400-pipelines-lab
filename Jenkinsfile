@@ -1,8 +1,34 @@
 pipeline {
     agent {
         kubernetes {
-            inheritFrom 'maven'        // our "maven" template (Helm): JDK 17 + Maven
-            defaultContainer 'maven'   // every sh step runs in the maven container
+            // Pod: jnlp + Maven/Java 11 (Quarkus 1.12), everything in /tmp/agent (OpenShift fix)
+            yaml '''
+apiVersion: v1
+kind: Pod
+spec:
+  containers:
+    - name: jnlp
+      image: jenkins/inbound-agent:latest-jdk17
+      workingDir: /tmp/agent
+      env:
+        - { name: HOME, value: /tmp/agent }
+      resources:
+        requests: { cpu: 100m, memory: 256Mi }
+        limits:   { cpu: 500m, memory: 512Mi }
+    - name: maven
+      image: maven:3.9-eclipse-temurin-11
+      command: ["sleep"]
+      args: ["infinity"]
+      workingDir: /tmp/agent
+      env:
+        - { name: HOME, value: /tmp/agent }
+        - { name: MAVEN_CONFIG, value: "" }
+        - { name: MAVEN_OPTS, value: "-Duser.home=/tmp/agent" }
+      resources:
+        requests: { cpu: 250m, memory: 512Mi }
+        limits:   { cpu: 1, memory: 1536Mi }
+'''
+            defaultContainer 'maven'
         }
     }
 
@@ -11,11 +37,18 @@ pipeline {
     }
 
     stages {
+        stage('Build') {
+            steps {
+                // download dependencies + compile once, before the parallel stages
+                sh 'mvn -B -DskipTests test-compile'
+            }
+        }
+
         stage('Test') {
             parallel {
                 stage('Unit tests') {
                     steps {
-                        sh 'chmod +x ./mvnw && ./mvnw test -D testGroups=unit'
+                        sh 'mvn -B test -D testGroups=unit'
                     }
                 }
                 stage('Integration tests') {
@@ -23,7 +56,7 @@ pipeline {
                         expression { return params.RUN_INTEGRATION_TESTS }
                     }
                     steps {
-                        sh 'chmod +x ./mvnw && ./mvnw test -D testGroups=integration'
+                        sh 'mvn -B test -D testGroups=integration'
                     }
                 }
             }
